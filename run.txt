@@ -1,3 +1,4 @@
 smart contract 1 deployed with u1, u2, itemid, price
 buyer deposits currency
 readyToTrade -> true if deposited > price 
+
