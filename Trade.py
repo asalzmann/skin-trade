@@ -9,8 +9,9 @@ from steampy.utils import GameOptions
 #contract_address     = [YOUR CONTRACT ADDRESS]
 wallet_private_key   = '1234rtgfde4567uhgfr67uj' # TODO : replace with a real private key 
 wallet_address       = 'hgt67uhgfrtyujnbgtyuj' # TODO : replace with a real wallet address 
+YOUR_INFURA_URL = "what is this ?????"
 
-w3 = Web3(HTTPProvider([YOUR INFURA URL]))
+w3 = Web3(HTTPProvider([YOUR_INFURA_URL]))
 w3.eth.enable_unaudited_features()
 
 
