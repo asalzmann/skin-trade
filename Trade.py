@@ -53,22 +53,17 @@ def t():
 
     if USER_1_BID >= USER_2_SELL_PRICE:
         # deploy smart contract @params : ETH UID1, ETH UID2, itemid, price
-        contract.deploy({
+        tx_hash = contract.constructor.transact({
             arguments: [USER_1_ETH_ADDR, USER_2_ETH_ADDR, item_ID, USER_2_SELL_PRICE]
         })
-        .send({
-            from: wallet_address,
-            gas: 1500000,
-            gasPrice: '30000000000000'
-        }, (error, transactionHash) => { ... })
-        .on('error', (error) => { ... })
-        .on('transactionHash', (transactionHash) => { ... })
-        .on('receipt', (receipt) => { ... })
-        .on('confirmation', (confirmationNumber, receipt) => { ... })
-        .then((newContractInstance) => {
-            console.log(newContractInstance.options.address)
-            deployed_contract = newContractInstance
-        });
+
+        # Wait for the transaction to be mined, and get the transaction receipt
+        tx_receipt = w3.eth.waitForTransactionReceipt(tx_hash)
+
+        deployed_contract = w3.eth.contract(
+            address=tx_receipt.contractAddress,
+            abi=contract_abi.abi,
+        )
 
     	while time.time() < timeout: # run 10 min
 
@@ -147,7 +142,8 @@ def transferFundsToBuyer(contract):
 
 
 def executeTrade(u1, u2, item_ID):
-	# todo
-	# u1 makes offer
-	# u2 accepts offer
-	return
+
+
+
+
+    # return success
