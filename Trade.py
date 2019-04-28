@@ -1,75 +1,87 @@
-import js2py
-import steampy 
+import requests
+import random
+import json
+import time
+import os
+from flask import Flask, render_template, session, redirect, url_for, escape, request
+import steampy
 import time
 from web3 import Web3, HTTPProvider
 import contract_abi
 from steampy.client import SteamClient, Asset
 from steampy.utils import GameOptions
 
-#contract_address     = [YOUR CONTRACT ADDRESS]
-wallet_private_key   = '1234rtgfde4567uhgfr67uj' # TODO : replace with a real private key 
-wallet_address       = 'hgt67uhgfrtyujnbgtyuj' # TODO : replace with a real wallet address 
-YOUR_INFURA_URL = "what is this ?????"
+
+app = Flask(__name__, static_folder='./build/static', template_folder='./build')
+app.secret_key = os.environ['SECRET']
+
+wallet_private_key   = os.environ['wallet_private']
+wallet_address       = os.environ['wallet_address']
+YOUR_INFURA_URL      = os.environ['INFURA']
 
 w3 = Web3(HTTPProvider([YOUR_INFURA_URL]))
 w3.eth.enable_unaudited_features()
 
 
-# todo : add infor to contract_abi.py from remix 
-contract_address = '1234rtgfde4567uhgfr67uj' # TODO : Add contract address from remix 
-contract = w3.eth.contract(address = contract_address, abi = contract_abi.abi)
+@app.route('/trade', methods=['POST'])
+def t():
+    contract = w3.eth.contract(abi = contract_abi.abi)
+    deployed_contract = None
 
-# Example of a test trade 
-# during sign up, steam account -> ETH wallet 
+    user1 = request.form['seller']
+    user2 = request.form['buyer']
 
-# User 1 
-# In our app, User 1's credentials are provided on sign up 
-USER_1_STEAM_ACCOUNT = 'user1'
-USER_1_STEAM_PASSWORD = 'password'
-USER_1_ETH_ADDR = '1234rtgfde4567uhgfr67uj' # TODO : replace with a real ETH address 
+    # User 1: Seller
+    # In our app, User 1's credentials are provided on sign up
+    USER_1_STEAM_ACCOUNT = user1.steam
+    USER_1_ETH_ADDR = user1.eth
 
-# User 2 
-# In our app, User 2's credentials are provided on sign up 
-USER_2_STEAM_ACCOUNT = 'user2'
-USER_2_STEAM_PASSWORD = 'password'
-USER_1_ETH_ADDR = 'hgfr5678ujhgfrtyujnbgtyu' #  TODO : replace with a real ETH address 
+    # User 2: Buyer
+    # In our app, User 2's credentials are provided on sign up
+    USER_2_STEAM_ACCOUNT = user2.steam
+    USER_2_ETH_ADDR = user2.eth
 
-# Intermediary 
-# We have the intermediary credentials 
+    # We already have the intermediary credentials
 
-# Parties agree on price & item 
-# Example prices agreed on 
-USER_1_BID = 10.0
-USER_2_SELL_PRICE = 10.0
-itemID = 1234
+    # Parties agree on price & item
+    USER_1_BID = user1.bid
+    USER_2_SELL_PRICE = user2.sell
+    item_ID = request.form['itemUID']
 
-# deploy smart contract @params : ETH UID1, ETH UID2, itemid, price
+    # timeout
+    timeout = time.time() + 60*10   # 10 minutes from now
 
+    if USER_1_BID >= USER_2_SELL_PRICE:
+        # deploy smart contract @params : ETH UID1, ETH UID2, itemid, price
+        tx_hash = contract.constructor.transact({
+            arguments: [USER_1_ETH_ADDR, USER_2_ETH_ADDR, item_ID, USER_2_SELL_PRICE]
+        })
 
-# timeout 
-timeout = time.time() + 60*10   # 10 minutes from now
+        # Wait for the transaction to be mined, and get the transaction receipt
+        tx_receipt = w3.eth.waitForTransactionReceipt(tx_hash)
 
+        deployed_contract = w3.eth.contract(
+            address=tx_receipt.contractAddress,
+            abi=contract_abi.abi,
+        )
 
-if USER_1_BID >= USER_2_SELL_PRICE:
+        while time.time() < timeout: # run 10 min
 
-	while time.time() < timeout: # run 10 min
+            if checkIfTradeFunded(contract):
 
-		if checkIfTradeFunded(contract):
+                success = executeTrade(user1, user2, item_ID)
 
-			success = executeTrade(USER_1_STEAM_ACCOUNT, USER_2_STEAM_PASSWORD, itemID)
-
-			if success:
-				#transfer funds from buyer -> seller in smart contract 
-				transferFundsToSeller(contract)
-			else: 
-				#transfer funds back to the buyer 
-				transferFundsToBuyer(contract)
-				return False # trade failed 
-		else:
-			return False 
-	return True
-else:
-	return False
+                if success:
+                    #transfer funds from buyer -> seller in smart contract
+                    return transferFundsToSeller(contract)
+                else:
+                    #transfer funds back to the buyer
+                    return transferFundsToBuyer(contract)
+            else:
+                time.sleep(10)
+        return {'status': 'failed', 'error': 'timeout'}
+    else:
+        return {'status': 'failure', 'error': 'invalid price'}
 
 
 def checkIfTradeFunded(contract):
@@ -87,34 +99,24 @@ def transferFundsToSeller(contract):
     })
 
     signed_txn = w3.eth.account.signTransaction(txn_dict, private_key=wallet_private_key)
-
     result = w3.eth.sendRawTransaction(signed_txn.rawTransaction)
-
     tx_receipt = w3.eth.getTransactionReceipt(result)
 
     count = 0
     while tx_receipt is None and (count < 30):
-
         time.sleep(10)
-
         tx_receipt = w3.eth.getTransactionReceipt(result)
-
-        print(tx_receipt)
-
 
     if tx_receipt is None:
         return {'status': 'failed', 'error': 'timeout'}
 
     processed_receipt = contract.events.TradeSuccess().processReceipt(tx_receipt)
-
     print(processed_receipt)
-   
-    return {'status': 'added', 'processed_receipt': processed_receipt}
-	
+    return {'status': 'success', 'processed_receipt': processed_receipt}
+
 
 def transferFundsToBuyer(contract):
-	#return contract.functions.executeTradeFailure().call() 
-	nonce = w3.eth.getTransactionCount(wallet_address)
+    nonce = w3.eth.getTransactionCount(wallet_address)
 
     txn_dict = contract.functions.executeTradeFailure().buildTransaction({
         'chainId': 3,
@@ -124,47 +126,24 @@ def transferFundsToBuyer(contract):
     })
 
     signed_txn = w3.eth.account.signTransaction(txn_dict, private_key=wallet_private_key)
-
     result = w3.eth.sendRawTransaction(signed_txn.rawTransaction)
-
     tx_receipt = w3.eth.getTransactionReceipt(result)
 
     count = 0
     while tx_receipt is None and (count < 30):
-
         time.sleep(10)
-
         tx_receipt = w3.eth.getTransactionReceipt(result)
-
-        print(tx_receipt)
-
 
     if tx_receipt is None:
         return {'status': 'failed', 'error': 'timeout'}
-    # not sure about this event thing 
     processed_receipt = contract.events.TradeFailure().processReceipt(tx_receipt)
-
     print(processed_receipt)
-   
-    return {'status': 'added', 'processed_receipt': processed_receipt}
+    return {'status': 'failed', 'processed_receipt': processed_receipt}
 
 
-def executeTrade(u1, u2, itemID):
-	# todo 
-	# u1 makes offer 
-	# u2 accepts offer 
-	return
+def executeTrade(u1, u2, item_ID):
 
-# buyer funds the trade 
-# while time < 10m
-	# if trade is funded
-	# 	execute trade (transfer item from seller to buyer) 
-	# 	if success:
-	# 		transfer funds from buyer -> seller in smart contract 
-	#	else: 
-	# 		transfer funds back to the buyer 
-	# 		return
-	# else:
-	# 	pass 
-# return 
 
+
+
+    # return success
