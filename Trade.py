@@ -144,6 +144,4 @@ def transferFundsToBuyer(contract):
 def executeTrade(u1, u2, item_ID):
 
 
-
-
     # return success
