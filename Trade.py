@@ -64,7 +64,7 @@ if USER_1_BID >= USER_2_SELL_PRICE:
 			else: 
 				#transfer funds back to the buyer 
 				transferFundsToBuyer(contract)
-				return False
+				return False # trade failed 
 		else:
 			return False 
 	return True
