@@ -141,7 +141,46 @@ def transferFundsToBuyer(contract):
     return {'status': 'failed', 'processed_receipt': processed_receipt}
 
 
+def getTradeID(u1, u2, item_ID):
+    return str(hash(u1)) + str(hash(u2)) + str(hash(item_ID))
 def executeTrade(u1, u2, item_ID):
+    success = False
+    MY_API_KEY = os.environ['MY_API_KEY']
+    PATH_TO_STEAMGUARD_FILE = os.environ['PATH_TO_STEAMGUARD_FILE']
+    OFFER_NAME = getTradeID(u1, u2, item_ID)
 
+    u1_username = u1.steam
+    u1_password = u1.pwd
+    u1_id = u1.steam_ID
 
-    # return success
+    u2_username = u2.steam
+    u2_password = u2.pwd
+    u2_id = u2.steam_ID
+    
+    steam_client_u1 = SteamClient(MY_API_KEY)
+    steam_client_u1.login(u1_username, u1_password, PATH_TO_STEAMGUARD_FILE)
+
+    steam_client_u2 = SteamClient(MY_API_KEY)
+    steam_client_u2.login(u2_username, u2_password, PATH_TO_STEAMGUARD_FILE)
+    
+
+    game = GameOptions.CS
+    my_items = steam_client_u1.get_my_inventory(game)
+    partner_items = steam_client_u1.get_partner_inventory(u2_id, game)
+    my_first_item = next(iter(my_items.values()))
+    partner_first_item = next(iter(partner_items.values()))
+    my_asset = Asset(my_first_item['id'], game)
+    partner_asset = Asset(partner_first_item['id'], game)
+    retDict = steam_client_u1.make_offer([my_asset], [partner_asset], partner_id, OFFER_NAME)
+
+    if retDict:
+        tradeofferid = retDict['tradeofferid']
+        steam_client_u2.accept_trade_offer(tradeofferid)
+
+        success = True # return success
+
+    steam_client_u1.logout()
+    steam_client_u2.logout()  
+    return success
+
+    
