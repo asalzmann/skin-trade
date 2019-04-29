@@ -6,7 +6,9 @@ A video game skin trading solution backed by blockchain technology
 Pull the repo.
 
 ## Usage
-Trade.py holds the requisite functionality to deploy the smart contract, check the status of the contract and execute a trade if the requisite funds have been transferred. \ncontracts/trade.sol contains the smart contract
+Trade.py holds the requisite functionality to deploy the smart contract, check the status of the contract and execute a trade if the requisite funds have been transferred.
+
+contracts/trade.sol contains the smart contract
 ## Dependencies
 requests
 random
